@@ -70,8 +70,8 @@ Generated Answer:
 Evaluate how well the generated answer addresses the question compared to the golden answer.
 
 Criteria:
-- Correctness: Does it contain the key information from the golden answer?
-- Completeness: Does it cover the main points?
+- Correctness: Does it contain the key information asked by the question from the golden answer?
+- Completeness: Is it missing any important points?
 - Accuracy: Is the information factually correct?
 - Relevance: Does it directly address the question?
 
@@ -102,7 +102,7 @@ Output only the JSON, nothing else."""
     except Exception as e:
         print(f"Error parsing evaluation response: {e}")
         print(f"Response was: {response}")
-        return 0.5, "Error parsing evaluation"
+        return -1, "Error parsing evaluation"
 
 
 def run_evaluation(
@@ -144,7 +144,7 @@ def run_evaluation(
     print(f"Loaded {len(documentation)} characters of documentation")
     
     # Initialize RLM
-    rlm = RLM(backend=backend, backend_kwargs=backend_kwargs)
+    rlm = RLM(backend=backend, backend_kwargs=backend_kwargs, verbose=True)
     
     # Run evaluation
     results = []

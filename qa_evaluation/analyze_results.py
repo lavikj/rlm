@@ -10,16 +10,16 @@ This script loads evaluation results and provides:
 
 import json
 from collections import defaultdict
-from typing import Dict, List, Any
+from typing import Any
 
 
-def load_results(results_file: str) -> Dict[str, Any]:
+def load_results(results_file: str) -> dict[str, Any]:
     """Load evaluation results from JSON file."""
     with open(results_file, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 
-def analyze_by_source(results: List[Dict[str, Any]]) -> Dict[str, Dict[str, float]]:
+def analyze_by_source(results: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
     """Analyze performance breakdown by source file."""
     by_source = defaultdict(list)
     
@@ -40,7 +40,7 @@ def analyze_by_source(results: List[Dict[str, Any]]) -> Dict[str, Dict[str, floa
     return analysis
 
 
-def find_outliers(results: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+def find_outliers(results: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     """Find best and worst performing questions."""
     sorted_results = sorted(results, key=lambda x: x['score'], reverse=True)
     
@@ -50,7 +50,7 @@ def find_outliers(results: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any
     }
 
 
-def analyze_generation_time(results: List[Dict[str, Any]]) -> Dict[str, float]:
+def analyze_generation_time(results: list[dict[str, Any]]) -> dict[str, float]:
     """Analyze generation time statistics."""
     times = [r['generation_time'] for r in results if r.get('generation_time', 0) > 0]
     
@@ -67,12 +67,34 @@ def analyze_generation_time(results: List[Dict[str, Any]]) -> Dict[str, float]:
     }
 
 
+def is_generation_error_text(text: str) -> bool:
+    lowered = text.lower()
+    if lowered.startswith("error:"):
+        return True
+    if "insufficient_quota" in lowered:
+        return True
+    if "error code: 429" in lowered:
+        return True
+    return False
+
+
+def is_error_result(result: dict[str, Any]) -> bool:
+    if is_generation_error_text(result.get("generated_answer", "")):
+        return True
+    if (result.get("explanation") or "").lower().startswith("evaluation error:"):
+        return True
+    score = result.get("score")
+    if isinstance(score, (int, float)) and score < 0:
+        return True
+    return False
+
+
 def print_analysis(results_file: str):
     """Print comprehensive analysis of evaluation results."""
     
     # Load results
     data = load_results(results_file)
-    metrics = data['metrics']
+    metrics = data.get('metrics', {})
     results = data['results']
     
     print("="*80)
@@ -162,7 +184,7 @@ def print_analysis(results_file: str):
         print(f"{threshold:>10.1f} {count:>10} {percentage:>11.1f}%")
     
     # Questions with errors
-    error_results = [r for r in results if 'ERROR' in r['generated_answer']]
+    error_results = [r for r in results if is_error_result(r)]
     if error_results:
         print("\n\n❌ QUESTIONS WITH ERRORS")
         print("-"*80)

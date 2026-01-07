@@ -9,6 +9,13 @@ echo "RLM QA Evaluation Pipeline"
 echo "=========================================="
 echo ""
 
+# Load .env file if it exists
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
+elif [ -f ../.env ]; then
+    export $(grep -v '^#' ../.env | xargs)
+fi
+
 # Check for API key
 if [ -z "$OPENAI_API_KEY" ]; then
     echo "❌ Error: OPENAI_API_KEY environment variable not set"
