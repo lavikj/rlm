@@ -10,33 +10,47 @@ This script:
 """
 
 import json
+import sys
 import time
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import Any, Tuple
+
+from dotenv import load_dotenv
+
+# Ensure repo root is importable even if Python is configured not to include CWD on sys.path.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from rlm import RLM
 from rlm.clients.openai import OpenAIClient
 
 
-def load_all_documentation(markdown_dir: str) -> str:
+def load_all_documentation(markdown_dir: str) -> list[str]:
     """
-    Load all markdown documentation files into a single context string.
+    Load all markdown documentation files as a list of document strings.
+
+    Important: We intentionally return a list (rather than one giant string) so the RLM
+    can naturally iterate/chunk over documents in the REPL environment without attempting
+    to send the entire corpus in a single `llm_query(...)` sub-call (which often exceeds
+    provider context limits).
     
     Args:
         markdown_dir: Directory containing markdown files
         
     Returns:
-        Combined documentation text
+        List of document strings
     """
     markdown_path = Path(markdown_dir)
     markdown_files = sorted(markdown_path.glob("*.md"))
     
-    all_docs = []
+    all_docs: list[str] = []
     for md_file in markdown_files:
         with open(md_file, 'r', encoding='utf-8') as f:
             content = f.read()
         all_docs.append(f"# File: {md_file.name}\n\n{content}\n\n{'='*80}\n\n")
     
-    return "\n".join(all_docs)
+    return all_docs
 
 
 def evaluate_answer(
@@ -113,7 +127,7 @@ def run_evaluation(
     evaluator_client: OpenAIClient,
     output_file: str,
     max_questions: int = None
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Run the complete evaluation pipeline.
     
@@ -141,7 +155,8 @@ def run_evaluation(
     # Load all documentation as context
     print("Loading documentation context...")
     documentation = load_all_documentation(markdown_dir)
-    print(f"Loaded {len(documentation)} characters of documentation")
+    total_chars = sum(len(d) for d in documentation)
+    print(f"Loaded {len(documentation)} documents ({total_chars} characters total)")
     
     # Initialize RLM
     rlm = RLM(backend=backend, backend_kwargs=backend_kwargs, verbose=True)
@@ -310,32 +325,54 @@ Please provide a clear, accurate answer based on the documentation."""
 def main():
     """Main execution function."""
     import os
-    
-    # Configuration
-    DATASET_FILE = "nvdla_qa_dataset.json"
-    MARKDOWN_DIR = "../nvdla-markdowns/markdown"
-    OUTPUT_FILE = "rlm_evaluation_results.json"
+
+    load_dotenv()
+
+    # Paths (anchored to this file so running from any CWD works)
+    qa_dir = Path(__file__).resolve().parent
+    repo_root = qa_dir.parent
+
+    DATASET_FILE = str(qa_dir / "nvdla_qa_dataset.json")
+    MARKDOWN_DIR = str(repo_root / "nvdla-markdowns" / "markdown")
+    OUTPUT_FILE = str(qa_dir / "rlm_evaluation_results_qwen_big.json")
     MAX_QUESTIONS = None  # Set to a number to limit evaluation, None = all
-    
-    # Check for API key
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+
+    # Check for OpenRouter API key (loaded from .env)
+    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+    if not openrouter_api_key:
         raise ValueError(
-            "OPENAI_API_KEY environment variable not set. "
+            "OPENROUTER_API_KEY environment variable not set. "
             "Please set it before running this script."
         )
     
-    # Configuration for RLM backend
-    backend = "openai"
+    # Configuration for RLM backend (OpenRouter)
+    backend = "openrouter"
+    # NOTE: OpenRouter model ids are exact; "qwen/qwen3-30b-a3b" is not available on OpenRouter.
+    # This default is a known OpenRouter model id at time of writing; override with RLM_MODEL as needed.
+    rlm_model = os.getenv("RLM_MODEL", "qwen/qwen3-235b-a22b-2507")
+    openrouter_provider = os.getenv("OPENROUTER_PROVIDER", "Cerebras")
+    openrouter_allow_fallbacks = os.getenv("OPENROUTER_ALLOW_FALLBACKS", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+    }
     backend_kwargs = {
-        "api_key": api_key,
-        "model_name": "gpt-5",  # Model to be evaluated
+        # api_key is intentionally omitted: OpenAIClient auto-reads OPENROUTER_API_KEY
+        "model_name": rlm_model,  # OpenRouter model id
+        # Force routing to Cerebras via OpenRouter (fail loud if not possible).
+        "extra_body": {
+            "provider": {"order": [openrouter_provider], "allow_fallbacks": openrouter_allow_fallbacks}
+        },
     }
     
-    # Initialize evaluator client
+    # Initialize evaluator client (also via OpenRouter by default).
+    # You can override via EVAL_MODEL / EVAL_BASE_URL if desired.
+    eval_model = os.getenv("EVAL_MODEL", "openai/gpt-4o")
+    eval_base_url = os.getenv("EVAL_BASE_URL", "https://openrouter.ai/api/v1")
     evaluator_client = OpenAIClient(
-        api_key=api_key,
-        model_name="gpt-5", 
+        model_name=eval_model,
+        base_url=eval_base_url,
     )
     
     print("RLM Question-Answering Evaluation")

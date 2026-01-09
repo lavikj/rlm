@@ -128,6 +128,11 @@ multiline answer)"""
         result = find_final_answer(text)
         assert result == "answer with spaces"
 
+    def test_final_allows_parentheses_in_answer(self):
+        text = "FINAL(The two clock domains are dla_core_clk (core/functional clock) and dla_csb_clk (host/CSB clock).)"
+        result = find_final_answer(text)
+        assert result == "The two clock domains are dla_core_clk (core/functional clock) and dla_csb_clk (host/CSB clock)."
+
     def test_final_and_final_var_parsing(self):
         """Test that both FINAL and FINAL_VAR patterns are parsed correctly."""
         # Test FINAL with various content types

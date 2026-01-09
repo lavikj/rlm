@@ -40,11 +40,41 @@ def find_final_answer(text: str, environment: "BaseEnv | None" = None) -> str | 
     Returns:
         The final answer string, or None if no final answer pattern is found
     """
+    def extract_balanced_parentheses_content(
+        text: str, open_paren_index: int
+    ) -> str | None:
+        """
+        Extract content inside a balanced parenthesis expression starting at open_paren_index.
+
+        This is used for parsing FINAL(...) and FINAL_VAR(...). Regex alone is insufficient
+        because answers often contain parentheses like "(example)" which would otherwise
+        truncate the extracted content at the first ')'.
+        """
+        if open_paren_index < 0 or open_paren_index >= len(text) or text[open_paren_index] != "(":
+            raise ValueError("open_paren_index must point to '('")
+
+        depth = 0
+        for i in range(open_paren_index, len(text)):
+            ch = text[i]
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    return text[open_paren_index + 1 : i]
+
+        # Unbalanced parentheses: no closing ')'
+        return None
+
     # Check for FINAL_VAR pattern first - must be at start of line
-    final_var_pattern = r"^\s*FINAL_VAR\((.*?)\)"
-    match = re.search(final_var_pattern, text, re.MULTILINE | re.DOTALL)
+    match = re.search(r"^\s*FINAL_VAR\(", text, re.MULTILINE)
     if match:
-        variable_name = match.group(1).strip().strip('"').strip("'")
+        open_paren_index = match.end() - 1
+        inner = extract_balanced_parentheses_content(text, open_paren_index)
+        if inner is None:
+            return None
+
+        variable_name = inner.strip().strip('"').strip("'")
         if environment is not None:
             result = environment.execute_code(f"print(FINAL_VAR({variable_name!r}))")
             final_answer = result.stdout.strip()
@@ -54,10 +84,13 @@ def find_final_answer(text: str, environment: "BaseEnv | None" = None) -> str | 
         return None
 
     # Check for FINAL pattern - must be at start of line
-    final_pattern = r"^\s*FINAL\((.*?)\)"
-    match = re.search(final_pattern, text, re.MULTILINE | re.DOTALL)
+    match = re.search(r"^\s*FINAL\(", text, re.MULTILINE)
     if match:
-        return match.group(1).strip()
+        open_paren_index = match.end() - 1
+        inner = extract_balanced_parentheses_content(text, open_paren_index)
+        if inner is None:
+            return None
+        return inner.strip()
 
     return None
 

@@ -10,9 +10,9 @@ from rlm.core.types import ModelUsageSummary, UsageSummary
 
 load_dotenv()
 
-# Load API keys from environment variables
-DEFAULT_OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-DEFAULT_OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+# NOTE: We intentionally do not cache API keys at import-time.
+# In many workflows (scripts, notebooks, different CWDs), `.env` may be loaded later,
+# and caching would cause clients to silently use `None` and fail with confusing 401s.
 DEFAULT_PRIME_INTELLECT_BASE_URL = "https://api.pinference.ai/api/v1/"
 
 
@@ -26,15 +26,31 @@ class OpenAIClient(BaseLM):
         api_key: str | None = None,
         model_name: str | None = None,
         base_url: str | None = None,
+        extra_body: dict[str, Any] | None = None,
         **kwargs,
     ):
         super().__init__(model_name=model_name, **kwargs)
 
         if api_key is None:
-            if base_url == "https://api.openai.com/v1" or base_url is None:
-                api_key = DEFAULT_OPENAI_API_KEY
-            elif base_url == "https://openrouter.ai/api/v1":
-                api_key = DEFAULT_OPENROUTER_API_KEY
+            normalized_base_url = base_url.rstrip("/") if base_url is not None else None
+            if normalized_base_url == "https://api.openai.com/v1" or normalized_base_url is None:
+                api_key = os.getenv("OPENAI_API_KEY")
+            elif normalized_base_url == "https://openrouter.ai/api/v1":
+                api_key = os.getenv("OPENROUTER_API_KEY")
+
+        if not api_key:
+            raise ValueError(
+                "API key is required. Provide `api_key=...` or set the appropriate env var "
+                "(OPENAI_API_KEY for OpenAI, OPENROUTER_API_KEY for OpenRouter)."
+            )
+
+        if extra_body is None:
+            extra_body = {}
+        if not isinstance(extra_body, dict):
+            raise ValueError("extra_body must be a dict[str, Any] if provided.")
+
+        self.base_url = base_url
+        self.extra_body = extra_body
 
         # For vLLM, set base_url to local vLLM server address.
         self.client = openai.OpenAI(api_key=api_key, base_url=base_url)
@@ -59,9 +75,9 @@ class OpenAIClient(BaseLM):
         if not model:
             raise ValueError("Model name is required for OpenAI client.")
 
-        extra_body = {}
+        extra_body = dict(self.extra_body)
         if self.client.base_url == DEFAULT_PRIME_INTELLECT_BASE_URL:
-            extra_body["usage"] = {"include": True}
+            extra_body.setdefault("usage", {"include": True})
 
         response = self.client.chat.completions.create(
             model=model, messages=messages, extra_body=extra_body
@@ -83,9 +99,9 @@ class OpenAIClient(BaseLM):
         if not model:
             raise ValueError("Model name is required for OpenAI client.")
 
-        extra_body = {}
-        if self.base_url == DEFAULT_PRIME_INTELLECT_BASE_URL:
-            extra_body["usage"] = {"include": True}
+        extra_body = dict(self.extra_body)
+        if self.client.base_url == DEFAULT_PRIME_INTELLECT_BASE_URL:
+            extra_body.setdefault("usage", {"include": True})
 
         response = await self.async_client.chat.completions.create(
             model=model, messages=messages, extra_body=extra_body
