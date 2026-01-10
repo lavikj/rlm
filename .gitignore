@@ -228,3 +228,8 @@ qa_evaluation/test_evaluation_results.json
 rlm_evaluation_results_optimized.json
 rlm_evaluation_results_qwen.json
 rlm_evaluation_results_qwen_big.json
+qa_evaluation/vcs_dataset.json
+qa_evaluation/vcs_dataset_valid.json
+qa_evaluation/vcs_dataset_valid.jsonl
+qa_evaluation/vcs_evaluation_results.json
+qa_evaluation/vcs_evaluation_results_qwen_big.json
