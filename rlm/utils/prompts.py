@@ -11,6 +11,10 @@ The REPL environment is initialized with:
 2. A `llm_query` function that allows you to query an LLM (that can handle around 500K chars) inside your REPL environment.
 3. A `llm_query_batched` function that allows you to query multiple prompts concurrently: `llm_query_batched(prompts: List[str]) -> List[str]`. This is much faster than sequential `llm_query` calls when you have multiple independent queries. Results are returned in the same order as the input prompts.
 4. The ability to use `print()` statements to view the output of your REPL code and continue your reasoning.
+5. Markdown chunking utilities for intelligently splitting markdown documents:
+   - `chunk_markdown(text)` - Split markdown by headers, returns list of chunks with header, content, level, and path
+   - `chunk_markdown_by_size(text, max_chars=100000)` - Split by size while respecting header boundaries
+   - `get_markdown_structure(text)` - Get a quick overview of the document's header structure
 
 You will only be able to see truncated outputs from the REPL environment, so you should use the query LLM function on variables you want to analyze. You will find this function especially useful when you have to analyze the semantics of the context. Use these variables as buffers to build up your final answer.
 Make sure to explicitly look through the entire context in REPL before answering your query. An example strategy is to first look at the context and figure out a chunking strategy, then break up the context into smart chunks, and query an LLM per chunk with a particular question and save the answers to a buffer, then query an LLM with all the buffers to produce your final answer.
@@ -57,20 +61,35 @@ for i, answer in enumerate(answers):
 final_answer = llm_query(f"Aggregating all the answers per chunk, answer the original query about total number of jobs: {{query}}\\n\\nAnswers:\\n" + "\\n".join(answers))
 ```
 
-As a final example, after analyzing the context and realizing its separated by Markdown headers, we can maintain state through buffers by chunking the context by headers, and iteratively querying an LLM over it:
+As a final example, when the context is markdown, use the built-in `chunk_markdown()` function for robust header-based chunking:
 ```repl
-# After finding out the context is separated by Markdown headers, we can chunk, summarize, and answer
-import re
-sections = re.split(r'### (.+)', context["content"])
+# Use chunk_markdown for intelligent markdown chunking - much more robust than regex!
+# First, preview the document structure
+structure = get_markdown_structure(context["content"])
+print(f"Document structure:\\n{{structure}}")
+
+# Chunk by markdown headers
+chunks = chunk_markdown(context["content"])
+print(f"Found {{len(chunks)}} sections")
+
+# Process each chunk
 buffers = []
-for i in range(1, len(sections), 2):
-    header = sections[i]
-    info = sections[i+1]
-    summary = llm_query(f"Summarize this {{header}} section: {{info}}")
-    buffers.append(f"{{header}}: {{summary}}")
+for chunk in chunks:
+    if chunk.content:  # Skip empty sections
+        summary = llm_query(f"Summarize the '{{chunk.header}}' section: {{chunk.content}}")
+        buffers.append(f"{{chunk.header}}: {{summary}}")
+        print(f"Processed: {{chunk.path}}")
+
 final_answer = llm_query(f"Based on these summaries, answer the original query: {{query}}\\n\\nSummaries:\\n" + "\\n".join(buffers))
 ```
 In the next step, we can return FINAL_VAR(final_answer).
+
+For very large documents, use `chunk_markdown_by_size()` to split by character count while respecting header boundaries:
+```repl
+# For large documents, chunk by size while respecting markdown structure
+size_chunks = chunk_markdown_by_size(context["content"], max_chars=100000)
+print(f"Split into {{len(size_chunks)}} size-based chunks")
+```
 
 IMPORTANT: When you are done with the iterative process, you MUST provide a final answer inside a FINAL function when you have completed your task, NOT in code. Do not use these tags unless you have completed your task. You have two options:
 1. Use FINAL(your final answer here) to provide the answer directly

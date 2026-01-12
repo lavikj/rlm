@@ -14,6 +14,11 @@ from typing import Any
 from rlm.core.comms_utils import LMRequest, send_lm_request, send_lm_request_batched
 from rlm.core.types import REPLResult, RLMChatCompletion
 from rlm.environments.base_env import NonIsolatedEnv
+from rlm.utils.markdown_utils import (
+    chunk_markdown,
+    chunk_markdown_by_size,
+    get_markdown_structure,
+)
 
 # =============================================================================
 # Safe Builtins
@@ -162,6 +167,11 @@ class LocalREPL(NonIsolatedEnv):
         self.globals["FINAL_VAR"] = self._final_var
         self.globals["llm_query"] = self._llm_query
         self.globals["llm_query_batched"] = self._llm_query_batched
+
+        # Add markdown chunking utilities
+        self.globals["chunk_markdown"] = chunk_markdown
+        self.globals["chunk_markdown_by_size"] = chunk_markdown_by_size
+        self.globals["get_markdown_structure"] = get_markdown_structure
 
     def _final_var(self, variable_name: str) -> str:
         """Return the value of a variable as a final answer."""
