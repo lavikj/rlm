@@ -7,66 +7,26 @@ query_documents endpoint with an OpenRouter model.
 
 from dotenv import load_dotenv
 
-from rlm.api import query_documents, query_documents_detailed
+from rlm.api import query_documents
 
 load_dotenv()
 
 
 def main():
-    # Example markdown documents
-    documents = {
-        "project_overview.md": """
-# Project Alpha Overview
+    # Load a real (large) markdown doc as the long context.
+    markdown_path = "example-docs/Synopsys/VCS/VCS User Guide 2019.06-SP1/markdown.md"
+    with open(markdown_path, encoding="utf-8") as f:
+        vcs_user_guide = f.read()
 
-Project Alpha is an innovative AI-powered document analysis system developed in 2024.
-
-## Key Features
-- Semantic search across large document collections
-- Multi-language support (English, Spanish, French, German)
-- Real-time collaboration tools
-- Export to PDF, DOCX, and HTML formats
-
-## Technical Stack
-- Backend: Python 3.12 with FastAPI
-- Database: PostgreSQL 15 with pgvector
-- Frontend: React 18 with TypeScript
-- AI: Claude 3.5 Sonnet for document analysis
-""",
-        "team_info.md": """
-# Team Information
-
-## Core Team Members
-- **Alice Chen** - Project Lead, joined January 2024
-- **Bob Martinez** - Senior Backend Developer, joined February 2024
-- **Carol Johnson** - Frontend Developer, joined March 2024
-- **David Kim** - ML Engineer, joined January 2024
-
-## Contact
-- Email: team@projectalpha.example.com
-- Slack: #project-alpha
-""",
-        "roadmap.md": """
-# Development Roadmap
-
-## Q1 2024 (Completed)
-- [x] Initial prototype
-- [x] Core API development
-- [x] Basic UI implementation
-
-## Q2 2024 (In Progress)
-- [ ] Advanced search features
-- [ ] User authentication
-- [ ] API rate limiting
-
-## Q3 2024 (Planned)
-- [ ] Multi-tenant support
-- [ ] Enterprise features
-- [ ] Mobile app beta
-""",
-    }
+    documents = {"vcs_user_guide_markdown.md": vcs_user_guide}
 
     # The query to answer
-    query = "What programming language and framework is used for the backend, and who is the senior backend developer?"
+    query = (
+        "From the VCS User Guide markdown provided as context: "
+        "(1) what is the guide's version and publication month/year, and "
+        "(2) what is the name of the environment variable used for the "
+        "synopsis_sim.setup file (setup file lookup)? Reply concisely."
+    )
 
     # Specify the OpenRouter model
     model = "anthropic/claude-3.5-sonnet"
