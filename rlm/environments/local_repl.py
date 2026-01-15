@@ -139,6 +139,7 @@ class LocalREPL(NonIsolatedEnv):
         self._lock = threading.Lock()
         self._context_count: int = 0
         self._history_count: int = 0
+        self._cleaned_up: bool = False
 
         # Setup globals, locals, and modules in environment.
         self.setup()
@@ -332,12 +333,21 @@ class LocalREPL(NonIsolatedEnv):
     @contextmanager
     def _temp_cwd(self):
         """Temporarily change to temp directory for execution."""
+        if not os.path.exists(self.temp_dir):
+            raise RuntimeError(
+                f"LocalREPL temp directory no longer exists: {self.temp_dir}. "
+                "This may indicate cleanup() was called while the REPL was still in use."
+            )
         old_cwd = os.getcwd()
         try:
             os.chdir(self.temp_dir)
             yield
         finally:
-            os.chdir(old_cwd)
+            # Only change back if the old cwd still exists
+            if os.path.exists(old_cwd):
+                os.chdir(old_cwd)
+            elif os.path.exists(self.temp_dir):
+                os.chdir(self.temp_dir)
 
     def execute_code(self, code: str) -> REPLResult:
         """Execute code in the persistent namespace and return result."""
@@ -378,13 +388,21 @@ class LocalREPL(NonIsolatedEnv):
         return False
 
     def cleanup(self):
-        """Clean up temp directory and reset state."""
+        """Clean up temp directory and reset state.
+        
+        This method is idempotent - safe to call multiple times.
+        """
+        if getattr(self, '_cleaned_up', False):
+            return
+        self._cleaned_up = True
+        
         try:
-            shutil.rmtree(self.temp_dir)
+            if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+                shutil.rmtree(self.temp_dir)
         except Exception:
             pass
-        self.globals.clear()
-        self.locals.clear()
-
-    def __del__(self):
-        self.cleanup()
+        
+        if hasattr(self, 'globals'):
+            self.globals.clear()
+        if hasattr(self, 'locals'):
+            self.locals.clear()
