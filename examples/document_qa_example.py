@@ -28,14 +28,11 @@ def main():
         "synopsis_sim.setup file (setup file lookup)? Reply concisely."
     )
 
-    # Specify the OpenRouter model
-    model = "anthropic/claude-3.5-sonnet"
-
     print("=" * 60)
     print("Document QA Example with RLM")
     print("=" * 60)
     print(f"\nQuery: {query}")
-    print(f"Model: {model}")
+    print("Model: qwen/qwen3-235b-a22b-2507 (fixed, via Cerebras)")
     print(f"Documents: {list(documents.keys())}")
     print("\n" + "-" * 60)
 
@@ -45,7 +42,6 @@ def main():
         answer = query_documents(
             documents=documents,
             query=query,
-            model=model,
             verbose=False,  # Set to True to see RLM progress
         )
         print(f"\nAnswer: {answer}")
